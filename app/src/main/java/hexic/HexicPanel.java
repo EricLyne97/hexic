@@ -16,34 +16,30 @@ import java.awt.event.MouseMotionAdapter;
 public class HexicPanel extends JPanel {
     private static final int WINDOW_WIDTH = 640, WINDOW_HEIGHT = 480;
     static TileBoard tileBoard = new TileBoard();
-    private BoardState boardState = BoardState.SETUP;
     
-    enum BoardState {
-        SETUP,
-        IDLE,
-        LOCKED
-    }
+
     
     public HexicPanel() {
         setBorder(BorderFactory.createLineBorder(Color.black));
 
         addMouseListener(new MouseAdapter(){
             public void mousePressed(MouseEvent e){
-                boolean[][] test = tileBoard.scanForClusters();
-                tileBoard.deleteTiles(test);
-                repaint();
-
+                if (e.getButton() == MouseEvent.BUTTON1) {
+                    tileBoard.triggerRotateLeft();
+                } else if (e.getButton() == MouseEvent.BUTTON3) {
+                    // Right click
+                    tileBoard.triggerRotateRight();
+                }
             }
         });
-        Timer timer = new Timer(1000, new ActionListener() {
+        Timer timer = new Timer(100, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                tileBoard.dropBoard();
+                tileBoard.boardLogic();
                 repaint();
             }
         });
         timer.start();
-        boardState = BoardState.IDLE;
     }
 
     @Override
