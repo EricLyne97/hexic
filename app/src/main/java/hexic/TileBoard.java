@@ -9,7 +9,9 @@ import java.util.Random;
 
 public class TileBoard {
     private static final int NUM_COLS = 10;
-    private static final int NUM_ROWS = 8;
+    private static final int NUM_ROWS = 8*2 + 1;
+                                                    
+    private int queuedRotations = 0;                       
 
     private final double TILE_X_SPACING = 2 + 3.0*Tile.SIDE_LENGTH/2.0;
     private final double TILE_Y_SPACING = 1 + Tile.SIDE_LENGTH*Math.sin(Math.PI/3);
@@ -19,11 +21,11 @@ public class TileBoard {
     private Tile[][] tiles;
     static Cursor cursor = new Cursor();
 
-    private void InitBoard(){
+    public void InitBoard(){
         Random rand = new Random();
 
         // Double the rows so that odd rows can be on the "half" step
-        this.tiles = new Tile[NUM_COLS][NUM_ROWS*2];
+        this.tiles = new Tile[NUM_COLS][NUM_ROWS];
         int startingIndex = 0;
         for(int i=0; i < tiles.length; i++) {
             // Even rows start on 1, Odd rows start on 0 
@@ -35,8 +37,16 @@ public class TileBoard {
         }
     }
 
+    public void clear(){
+        this.tiles = new Tile[NUM_COLS][NUM_ROWS];
+    }
+
     public TileBoard(){
         InitBoard();
+    }
+
+    public void boardLogic(){
+
     }
 
     public void paint(Graphics g){
@@ -66,18 +76,20 @@ public class TileBoard {
         for(int i=0; i < selection.length; i++) {
             for(int j=0; j < selection[i].length; j+=1) {
                 if(selection[i][j]){
-                    tiles[i][j].color = Color.black;
+                    tiles[i][j] = null;
                 }
             }
         }
     }
 
     public boolean[][] scanForClusters(){
-        boolean[][] result = new boolean[NUM_COLS][NUM_ROWS*2];
+        boolean[][] result = new boolean[NUM_COLS][NUM_ROWS];
         // Check for < shaped clusters
         for(int i=0; i < tiles.length-1; i++) {
             for(int j=1; j < tiles[i].length-1; j++) {
                 if(tiles[i][j]!=null &&
+                tiles[i+1][j-1]!=null &&
+                tiles[i+1][j+1]!=null &&
                 tiles[i][j].color == tiles[i+1][j-1].color && 
                 tiles[i][j].color == tiles[i+1][j+1].color){
                     result[i][j] = true;
@@ -90,6 +102,8 @@ public class TileBoard {
         for(int i=0; i < tiles.length-1; i++) {
             for(int j=0; j < tiles[i].length-2; j++) {
                 if(tiles[i][j]!=null &&
+                tiles[i][j+2]!=null &&
+                tiles[i+1][j+1]!=null&&
                 tiles[i][j].color == tiles[i][j+2].color && 
                 tiles[i][j].color == tiles[i+1][j+1].color){
                     result[i][j] = true;
@@ -98,12 +112,31 @@ public class TileBoard {
                 }
             }
         }
-        for(int i=0; i < tiles.length; i++) {
-            for(int j=0; j < tiles[i].length; j+=1) {
-                System.out.printf("%6s",result[i][j]);
-            }
-            System.out.println();
-        }
         return result;
+    }
+
+    public void dropBoard(){
+        for(Tile[] col : tiles){
+            for(int i = col.length-1 ; i >= 0 ; i--){
+                if(col[i]!=null){
+                    int j = i;
+                    while(j+2 < col.length && col[j+2] == null){
+                        col[j+2] = col[j];
+                        col[j] = null;
+                        j += 2;
+                    }
+                }
+            }
+        }
+    }
+    private void dropColumn(Tile[] col){
+        for(int i = col.length ; i >= 0 ; i--){
+            int j = i;
+            while(j+2 < col.length && col[j+2] == null){
+                col[j+2] = col[j];
+                col[j] = null;
+                j += 2;
+            }
+        }
     }
 }
