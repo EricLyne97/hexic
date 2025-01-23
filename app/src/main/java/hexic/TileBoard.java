@@ -6,7 +6,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Random;
+
+import hexic.Cursor.Mode;
 
 public class TileBoard {
     private static final int NUM_COLS = 10;
@@ -16,14 +19,16 @@ public class TileBoard {
     private boolean leftRotationTriggered = false;
     private int remainingRotations = 0;
 
-    private final double TILE_X_SPACING = 2 + 3.0*Tile.SIDE_LENGTH/2.0;
-    private final double TILE_Y_SPACING = 1 + Tile.SIDE_LENGTH*Math.sin(Math.PI/3);
+    private final double TILE_X_SPACING = 2.0 + 3.0*Tile.SIDE_LENGTH/2.0;
+    private final double TILE_Y_SPACING = 1.0 + Tile.SIDE_LENGTH*Math.sin(Math.PI/3.0);
 
-    private static final Color[] tileColors = {Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.ORANGE};
+    private static final Color[] tileColors = {Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.MAGENTA};
 
     private Tile[][] tiles;
-    static Cursor cursor = new Cursor();
+    private Cursor cursor = new Cursor();
+
     public State state = State.SETUP;
+    public int score;
 
     enum State {
         SETUP,
@@ -32,6 +37,13 @@ public class TileBoard {
         SCANNING_BOARD,
         DROPPING_TILES,
         ADDING_TILES
+    }
+
+    enum MoveDirection {
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT
     }
 
     public TileBoard(){
@@ -46,9 +58,16 @@ public class TileBoard {
             case IDLE:
                 if (rightRotationTriggered || leftRotationTriggered){
                     state=State.ROTATING;
-                    remainingRotations = 3;
+                    int numRotations = 0;
+                    if(cursor.mode == Mode.STANDARD){
+                        numRotations = 3;
+                    }
+                    else if(cursor.mode == Mode.STAR){
+                        numRotations = 1;
+                    }
+                    remainingRotations = rightRotationTriggered ? numRotations : -numRotations;
                     rightRotationTriggered = false;
-                    leftRotationTriggered = false;
+                    leftRotationTriggered = false;     
                 }
                 else {
                     System.out.println("Waiting for input");
@@ -85,6 +104,10 @@ public class TileBoard {
                 else{
                     state=State.SCANNING_BOARD;
                 }
+                if (cursor.mode != Mode.STANDARD && 
+                tiles[cursor.x][cursor.y].getClass() == Tile.class){
+                    cursor.mode = Mode.STANDARD;
+                }
                 break;
             default:
                 break;
@@ -96,18 +119,17 @@ public class TileBoard {
 
         // Double the rows so that odd rows can be on the "half" step
         this.tiles = new Tile[NUM_COLS][NUM_ROWS];
-        // while(fillTopRow() || dropTilesOnce() || scanAndDeleteTiles()){
-        //     System.out.println("im doing work");
+        while(fillTopRow() || dropTilesOnce() || scanAndDeleteTiles()){}
+        tiles[4][5] = new Star();
+        // int startingIndex = 0;
+        // for(int i=0; i < tiles.length; i++) {
+        //     // Even rows start on 1, Odd rows start on 0 
+        //     startingIndex = (i+1)%2;
+        //     for(int j=startingIndex; j < tiles[i].length; j+=2) {
+        //         // tiles[i][j] = new Tile(tileColors[1]);
+        //         tiles[i][j] = new Tile(tileColors[rand.nextInt(tileColors.length)]);
+        //     }
         // }
-        int startingIndex = 0;
-        for(int i=0; i < tiles.length; i++) {
-            // Even rows start on 1, Odd rows start on 0 
-            startingIndex = (i+1)%2;
-            for(int j=startingIndex; j < tiles[i].length; j+=2) {
-                // tiles[i][j] = new Tile(tileColors[1]);
-                tiles[i][j] = new Tile(tileColors[rand.nextInt(tileColors.length)]);
-            }
-        }
         state = State.IDLE;
     }
 
@@ -124,17 +146,120 @@ public class TileBoard {
         leftRotationTriggered = true;
     }
 
+    // TODO make this whole thing cleaner
+    public void moveCursor(MoveDirection direction) {
+        switch (direction) {
+            case MoveDirection.LEFT:
+                if (cursor.mode == Mode.STANDARD){
+                    // TODO replace this with star type
+                    if (tiles[cursor.x][cursor.y] != null && 
+                    tiles[cursor.x][cursor.y].color == Color.WHITE){
+                        cursor.mode = Mode.STAR;
+                    }
+                    else{
+                        cursor.x = Math.max(cursor.x-1,0);
+                    }
+                }
+                else{
+                    cursor.mode = Mode.STANDARD;
+                    cursor.x = Math.max(cursor.x-1,0);
+                }
+                break;
+
+            case MoveDirection.RIGHT:
+                if (cursor.mode == Mode.STANDARD){
+                    // TODO replace this with star type
+                    if (tiles[cursor.x+1][cursor.y] != null && 
+                    tiles[cursor.x+1][cursor.y].color == Color.WHITE){
+                        cursor.x = Math.min(cursor.x+1,NUM_COLS-1);
+                        cursor.mode = Mode.STAR;
+                    }
+                    else{
+                        cursor.x = Math.min(cursor.x+1,NUM_COLS-1);
+                    }
+                }
+                else{
+                    cursor.mode = Mode.STANDARD;
+                }
+                break;
+
+            case MoveDirection.UP:
+                cursor.y = Math.max(cursor.y-1,0);
+                break;
+
+            case MoveDirection.DOWN:
+                cursor.y = Math.min(cursor.y+1,NUM_ROWS-1);
+                break;
+
+            default:
+                break;
+        }
+    }
+
     private void rotateTiles(){
+        Tile temp;
+        int[][] swapIndices = new int[][] {};
+        switch (cursor.mode) {
+            case Mode.STANDARD:
+                boolean flipped = ((cursor.x+cursor.y)%2 == 0);
+                if (flipped){
+                    swapIndices  = new int[][]{
+                        {cursor.x , cursor.y + 1},
+                        {cursor.x + 1, cursor.y},
+                        {cursor.x,cursor.y - 1}
+                    };
+                } 
+                else {
+                    swapIndices  = new int[][]{
+                        {cursor.x,cursor.y},
+                        {cursor.x + 1,cursor.y + 1},
+                        {cursor.x + 1,cursor.y - 1}
+                    };
+                }
+                break;
+            case Mode.STAR:
+                swapIndices  = new int[][]{
+                    {cursor.x , cursor.y + 2},
+                    {cursor.x + 1, cursor.y + 1},
+                    {cursor.x + 1,cursor.y - 1},
+                    {cursor.x,cursor.y - 2},
+                    {cursor.x - 1,cursor.y - 1},
+                    {cursor.x - 1,cursor.y + 1},
+                };
+                break;
+            default:
+                break;
+        }
+
         if (remainingRotations == 0){
             return;
         }
-        else if (remainingRotations > 0){
-            return;
+
+        for(int[] index : swapIndices){
+            if(index[0] < 0 || index[0] >= NUM_COLS ||
+            index[1] < 0|| index[0] >= NUM_ROWS ||
+            tiles[index[0]][index[1]] == null){
+                System.out.println("Skipping illegal move");
+                remainingRotations = 0;
+                return;
+            }
         }
-        else{
-            return;
+        
+        if (remainingRotations < 0){
+            List<int[]> list = Arrays.asList(swapIndices);
+            Collections.reverse(list);
+            swapIndices = list.toArray(swapIndices);
         }
+
+        temp = tiles[swapIndices[0][0]][swapIndices[0][1]];
+        for (int i=0 ; i < swapIndices.length-1; i++){
+            tiles[swapIndices[i][0]][swapIndices[i][1]] = tiles[swapIndices[i + 1][0]][swapIndices[i + 1][1]];
+        }
+        tiles[swapIndices[swapIndices.length-1][0]][swapIndices[swapIndices.length-1][1]] = temp;
+        remainingRotations += remainingRotations > 0 ? -1 : 1;
     }
+
+
 
     /**
      * Scans the board for tiles that match patterns for deletion, and deletes
@@ -143,30 +268,67 @@ public class TileBoard {
      * @return boolean If at least one tile was delete
      */
     private boolean scanAndDeleteTiles(){
-        boolean[][] markedTiles = scanForClusters();
-        deleteTiles(markedTiles);
-        // TODO: make this cleaner
         boolean result = false;
-        for(boolean[] array : markedTiles){
-            for (boolean value: array){
-                result = result || value;
-            }
-        }
+        scanForPatterns();
+        scanForClusters();
+        promoteTiles();
+        result = deleteTiles();
         return result;
     }
 
-    private void deleteTiles(boolean[][] selection){
-        for(int i=0; i < selection.length; i++) {
-            for(int j=0; j < selection[i].length; j+=1) {
-                if(selection[i][j]){
-                    tiles[i][j] = null;
+    private void promoteTiles(){
+        for(int i=0; i < tiles.length; i++) {
+            for(int j=0; j < tiles[i].length; j+=1) {
+                if(tiles[i][j]!=null && tiles[i][j].markedForPromotion){
+                    tiles[i][j] = new Star();
                 }
             }
         }
     }
 
-    private boolean[][] scanForClusters(){
-        boolean[][] result = new boolean[NUM_COLS][NUM_ROWS];
+    private boolean deleteTiles(){
+        boolean result = false;
+        for(int i=0; i < tiles.length; i++) {
+            for(int j=0; j < tiles[i].length; j+=1) {
+                if(tiles[i][j]!=null && tiles[i][j].markedForDeletion){
+                    tiles[i][j] = null;
+                    result = true;
+                    score += 50;
+                }
+            }
+        }
+        return result;
+    }
+
+    private void scanForPatterns(){
+        // Check for < shaped clusters
+        for(int i=1; i < tiles.length-1; i++) {
+            for(int j=2; j < tiles[i].length-2; j++) {
+                if(tiles[i][j]  !=  null &&
+                tiles[i][j-2]   !=  null &&
+                tiles[i+1][j+1] !=  null &&
+                tiles[i+1][j-1] !=  null &&
+                tiles[i][j+2]   !=  null &&
+                tiles[i-1][j-1] !=  null &&
+                tiles[i-1][j+1] !=  null &&
+                tiles[i][j-2].color == tiles[i+1][j+1].color && 
+                tiles[i][j-2].color == tiles[i+1][j-1].color && 
+                tiles[i][j-2].color == tiles[i][j+2].color && 
+                tiles[i][j-2].color == tiles[i-1][j-1].color && 
+                tiles[i][j-2].color == tiles[i-1][j+1].color){
+                    tiles[i][j].markForPromotion();
+                    tiles[i][j-2].markForDeletion();
+                    tiles[i+1][j+1].markForDeletion();
+                    tiles[i+1][j-1].markForDeletion();
+                    tiles[i][j+2].markForDeletion();
+                    tiles[i-1][j-1].markForDeletion();
+                    tiles[i-1][j+1].markForDeletion();
+                }
+            }
+        }
+    }
+
+    private void scanForClusters(){
         // Check for < shaped clusters
         for(int i=0; i < tiles.length-1; i++) {
             for(int j=1; j < tiles[i].length-1; j++) {
@@ -175,9 +337,9 @@ public class TileBoard {
                 tiles[i+1][j+1]!=null &&
                 tiles[i][j].color == tiles[i+1][j-1].color && 
                 tiles[i][j].color == tiles[i+1][j+1].color){
-                    result[i][j] = true;
-                    result[i+1][j-1] = true;
-                    result[i+1][j+1] = true;
+                    tiles[i][j].markForDeletion();
+                    tiles[i+1][j-1].markForDeletion();
+                    tiles[i+1][j+1].markForDeletion();
                 }
             }
         }
@@ -189,13 +351,12 @@ public class TileBoard {
                 tiles[i+1][j+1]!=null&&
                 tiles[i][j].color == tiles[i][j+2].color && 
                 tiles[i][j].color == tiles[i+1][j+1].color){
-                    result[i][j] = true;
-                    result[i][j+2] = true;
-                    result[i+1][j+1] = true;
+                    tiles[i][j].markForDeletion();
+                    tiles[i][j+2].markForDeletion();
+                    tiles[i+1][j+1].markForDeletion();
                 }
             }
         }
-        return result;
     }
     
     
@@ -219,21 +380,6 @@ public class TileBoard {
         return result;
     }
 
-    public void dropTiles(){
-        for(Tile[] col : tiles){
-            for(int i = col.length-1 ; i >= 0 ; i--){
-                if(col[i]!=null){
-                    int j = i;
-                    while(j+2 < col.length && col[j+2] == null){
-                        col[j+2] = col[j];
-                        col[j] = null;
-                        j += 2;
-                    }
-                }
-            }
-        }
-    }
-
     public boolean fillTopRow(){
         boolean result = false;
         Random rand = new Random();
@@ -252,9 +398,12 @@ public class TileBoard {
         for(int i=0; i < tiles.length; i++) {
             for(int j=0; j < tiles[i].length; j++) {
                 if(tiles[i][j]!= null){
-                    tiles[i][j].paintTile(g, (int) TILE_X_SPACING*i, (int) TILE_Y_SPACING*j);
+                    tiles[i][j].paintTile(g, TILE_X_SPACING*i, TILE_Y_SPACING*j);
                 }
             }
         }
+        boolean flipped = ((cursor.x+cursor.y)%2 == 0);
+        double flipOffset = flipped ? 0 : Tile.SIDE_LENGTH*Math.cos(Math.PI/3);
+        cursor.paint(g, (cursor.x+1)*TILE_X_SPACING + flipOffset, (1+cursor.y)*TILE_Y_SPACING, flipped);
     }
 }
